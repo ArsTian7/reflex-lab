@@ -151,14 +151,45 @@
   function friendlyError(err) {
     var msg = String((err && err.message) || err || '未知错误');
     var code = err && err.status;
+    var kind = err && err.kind;
+    /* 顺序很重要：先按"浏览器层面失败的具体种类"分流，再按 HTTP 状态码分流，
+       否则超时会被归到"网络不可达"，把用户往错误的方向带。 */
+    if (kind === 'timeout' || msg.indexOf('超时') >= 0) {
+      return '请求超时（12 秒）。你到数据库的网络太慢或被拦了，试试手机热点或换个网络；成绩已经暂存，联网后会自动补交';
+    }
+    if (kind === 'network' || code === 0 || msg.indexOf('Failed to fetch') >= 0 ||
+        msg.indexOf('NetworkError') >= 0 || msg.indexOf('网络请求失败') >= 0) {
+      return '连不上数据库。常见原因是网络被拦（公司网 / 校园网 / 广告拦截插件）或 DNS 有问题；' +
+        '成绩已经暂存，联网后会自动补交';
+    }
     if (code === 401 || code === 403) return '密钥无效或权限被拒绝';
     if (code === 404) return '找不到数据表或视图，请先在数据库里执行 supabase/schema.sql';
     if (code === 429) return '请求太频繁，稍后再试';
-    if (code === 0 || msg.indexOf('网络请求失败') >= 0 || msg.indexOf('Failed to fetch') >= 0 ||
-        msg.indexOf('NetworkError') >= 0) return '网络不可达：检查 config.js 里的地址是否写对';
-    if (msg.indexOf('超时') >= 0) return '请求超时：网络不通或后端没有响应';
+    if (code >= 500) return '数据库服务暂时不可用（免费项目闲置 7 天会被暂停，去 Supabase 点一下 Restore）';
+    if (msg.indexOf('封禁') >= 0) return msg;
+    if (msg.indexOf('频繁') >= 0) return msg;
     if (msg.length > 90) return msg.slice(0, 90) + '…';
     return msg;
+  }
+
+  /* 只有"网络层面"的失败才值得自动重试 */
+  function isRetryable(err) {
+    return !!(err && (err.status === 0 || err.kind === 'timeout' || err.kind === 'network'));
+  }
+
+  /* 数据本身有问题（被校验拒绝、权限不足）就别再重试了，免得卡住队列 */
+  function isPermanent(err) {
+    var code = err && err.status;
+    return code === 400 || code === 401 || code === 403 || code === 404 || code === 409;
+  }
+
+  function findMyRank(rows) {
+    var me = String(profile.name || '').trim().toLowerCase();
+    rows = rows || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].name).toLowerCase() === me) return i + 1;
+    }
+    return 0;
   }
 
   /* ================= 提交成绩 ================= */
@@ -210,16 +241,67 @@
       submittedRun = lastResult.finishedAt;
       S.markSubmit();
       el('btnSubmit').disabled = false;
-      var rankTxt = res && res.rank ? ('总榜第 ' + res.rank + ' 名') : '已提交';
-      UI.setSubmitState('提交成功 · ' + rankTxt + (res && res.total ? '（共 ' + res.total + ' 人）' : ''), 'ok');
-      UI.toast('🎉 成绩已上榜 · ' + rankTxt, 'ok', 4200);
-      return refreshAll(true);
+      UI.toast('🎉 成绩已上榜', 'ok', 3600);
+      UI.setSubmitState('已上榜 · 正在刷新榜单…', 'ok');
+      /* 写入已经成功，读榜失败绝不能再说成"提交失败" */
+      return refreshAll(true).then(function (ok) {
+        if (!ok) {
+          UI.setSubmitState('成绩已记录在服务器，但榜单刷新失败，稍后会自动重试刷新。', 'warn');
+          return;
+        }
+        var rank = findMyRank(cache.all);
+        var rankMonth = findMyRank(cache.month);
+        var total = (cache.all || []).length;
+        UI.setSubmitState(rank
+          ? ('已上榜 · 总榜第 ' + rank + ' 名（共 ' + total + ' 人）' + (rankMonth ? '，月榜第 ' + rankMonth + ' 名' : ''))
+          : '已上榜', 'ok');
+      });
     }).catch(function (err) {
       submitting = false;
       el('btnSubmit').disabled = false;
+      var entry = buildEntry(lastResult);
+      if (isRetryable(err)) {
+        S.addPending(entry);
+        var n = S.pendingCount();
+        UI.setSubmitState('网络没通，这条成绩已暂存在本机（待补交 ' + n + ' 条），联网后会自动补交。', 'warn');
+        UI.toast('网络没通，成绩已暂存，恢复联网后会自动补交', 'warn', 6400);
+        return;
+      }
       var msg = friendlyError(err);
       UI.setSubmitState('提交失败：' + msg, 'error');
       UI.toast('提交失败：' + msg, 'error', 5200);
+    });
+  }
+
+  /* ================= 补交暂存的成绩 ================= */
+  var flushing = false;
+
+  function flushPending() {
+    if (flushing) return;
+    var list = S.getPending();
+    if (!list.length) return;
+    flushing = true;
+    B.submit(list[0]).then(function () {
+      S.shiftPending();
+      flushing = false;
+      UI.toast('已补交 1 条暂存成绩', 'ok', 3000);
+      var left = S.pendingCount();
+      if (left) {
+        UI.setSubmitState('还剩 ' + left + ' 条待补交…', 'warn');
+        setTimeout(flushPending, 1200);
+      } else {
+        S.markSubmit();
+        refreshAll(true).then(function (ok) {
+          if (ok) UI.setSubmitState('暂存的成绩已全部补交成功 🎉', 'ok');
+        });
+      }
+    }).catch(function (err) {
+      flushing = false;
+      if (isPermanent(err)) {
+        S.shiftPending();
+        UI.toast('有一条暂存成绩被判为无效，已丢弃：' + friendlyError(err), 'error', 6400);
+        if (S.pendingCount()) setTimeout(flushPending, 1500);
+      }
     });
   }
 
@@ -401,7 +483,16 @@
         engine.reset();
         UI.toast('检测到切换窗口，本次测试已取消（避免成绩不准）', 'warn', 3600);
       }
-      if (!document.hidden) refreshAll(true);
+      if (!document.hidden) {
+        flushPending();
+        refreshAll(true);
+      }
+    });
+
+    /* 浏览器报告恢复联网时，先把暂存的成绩补交掉 */
+    window.addEventListener('online', function () {
+      UI.toast('网络已恢复，正在补交暂存的成绩…', 'ok', 3000);
+      flushPending();
     });
 
     el('btnIgnoreMobile').addEventListener('click', function () {
@@ -475,6 +566,12 @@
     paintProfile();
     UI.setStage('idle', {});
     setText('chipBest', '我的最好 —');
+
+    var pendingAtBoot = S.pendingCount();
+    if (pendingAtBoot) {
+      UI.setSubmitState('有 ' + pendingAtBoot + ' 条成绩等待补交，恢复联网后会自动提交。', 'warn');
+      setTimeout(flushPending, 2500);
+    }
 
     var pb = S.personalBest();
     if (pb) setText('chipBest', '我的最好 ' + UI.fmt(pb.average, 1) + 'ms');

@@ -246,22 +246,36 @@
     return p ? p.label : '橘猫';
   }
 
-  /* 把任意形状的上传图片压成 128px 的正方形 data URL */
+  /* 把任意形状的上传图片压成 96px 的正方形 data URL。
+     webp 优先；浏览器不支持时退回 jpeg（透明 PNG 在有些浏览器上会膨胀到几十 KB，
+     直接存进数据库会让整个榜单变慢，所以这里做二次编码 + 体积兜底）。 */
   function compressImage(file, cb) {
     var reader = new FileReader();
     reader.onload = function () {
       var img = new Image();
       img.onload = function () {
         try {
-          var size = 128;
+          var size = 96;
           var cv = document.createElement('canvas');
           cv.width = size; cv.height = size;
           var ctx = cv.getContext('2d');
           ctx.imageSmoothingQuality = 'high';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, size, size);
           var scale = Math.max(size / img.width, size / img.height);
           var w = img.width * scale, h = img.height * scale;
           ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-          cb(null, cv.toDataURL('image/webp', 0.82));
+
+          var out = cv.toDataURL('image/webp', 0.8);
+          if (out.indexOf('data:image/webp') !== 0 || out.length > 12000) {
+            var jpg = cv.toDataURL('image/jpeg', 0.82);
+            if (jpg.length < out.length) out = jpg;
+          }
+          if (out.length > 15000) {
+            cb(new Error('头像压缩后仍然太大，换一张更简单的图片试试'));
+            return;
+          }
+          cb(null, out);
         } catch (e) { cb(e); }
       };
       img.onerror = function () { cb(new Error('图片读取失败')); };

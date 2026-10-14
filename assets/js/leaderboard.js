@@ -29,7 +29,9 @@
       return res;
     }, function (err) {
       clearTimeout(timer);
-      var e = new Error(err && err.name === 'AbortError' ? '请求超时（12 秒）' : '网络请求失败');
+      var timedOut = !!(err && err.name === 'AbortError');
+      var e = new Error(timedOut ? '请求超时（12 秒）' : '网络请求失败');
+      e.kind = timedOut ? 'timeout' : 'network';
       e.status = 0;
       throw e;
     });
@@ -178,18 +180,15 @@
           device_id: S.deviceId(),
           raw: entry.raw || entry.trials,
         };
+        /* 只负责写入。写完就返回，读榜的事交给调用方单独做——
+           否则"写成功了但读榜超时"会被误报成提交失败。 */
         return request('/' + (conf().table || 'scores'), {
           method: 'POST',
           headers: { 'Prefer': 'return=minimal' },
           body: JSON.stringify(body),
         }).then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw fail(res, t); });
-          return { ok: true };
-        }).then(function () {
-          return SB.fetch('all');
-        }).then(function (rows) {
-          var rank = rows.findIndex(function (r) { return lower(r.name) === lower(entry.name); }) + 1;
-          return { ok: true, rank: rank || null, total: rows.length };
+          return { ok: true, rank: null, total: null };
         });
       },
       ready: ready,

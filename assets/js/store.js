@@ -11,6 +11,7 @@
     settings: 'reflex.settings.v1',
     device: 'reflex.device.v1',
     lastSubmit: 'reflex.lastSubmit.v1',
+    pending: 'reflex.pending.v1',
   };
 
   function read(key, fallback) {
@@ -98,6 +99,26 @@
     return Math.max(0, CFG.minSubmitMs - (Date.now() - lastSubmitAt()));
   }
 
+  /* ---------- 待补交队列（网络不通时先把成绩存在本机） ---------- */
+  function getPending() {
+    var list = read(K.pending, []);
+    return Array.isArray(list) ? list : [];
+  }
+  function addPending(entry) {
+    var list = getPending();
+    list.push(Object.assign({}, entry, { queuedAt: Date.now() }));
+    write(K.pending, list.slice(-20));
+    return getPending();
+  }
+  function shiftPending() {
+    var list = getPending();
+    list.shift();
+    write(K.pending, list);
+    return list;
+  }
+  function pendingCount() { return getPending().length; }
+  function clearPending() { write(K.pending, []); }
+
   window.ReflexStore = {
     getProfile: getProfile,
     saveProfile: saveProfile,
@@ -110,6 +131,11 @@
     lastSubmitAt: lastSubmitAt,
     markSubmit: markSubmit,
     submitCooldownLeft: submitCooldownLeft,
+    getPending: getPending,
+    addPending: addPending,
+    shiftPending: shiftPending,
+    pendingCount: pendingCount,
+    clearPending: clearPending,
     monthKeyOf: monthKeyOf,
     monthLabel: monthLabel,
     msToNextMonth: msToNextMonth,
