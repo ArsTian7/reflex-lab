@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>反应速度实验室 Reaction Lab · 在线反应速度测试与排行榜</title>
+<meta name="description" content="屏幕变绿立刻点击，10 次取平均，毫秒计。总排行榜与月排行榜、自定义昵称与可爱动物头像，纯电脑端体验。" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#080a0f" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="反应速度实验室 · Reaction Lab" />
+<meta property="og:description" content="10 次点击取平均的毫秒级反应速度测试，附带总榜 / 月榜在线排行榜。" />
+<link rel="icon" href="assets/favicon.svg" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="18" r="11" stroke="currentColor" stroke-width="2.4"/>
+        <path d="M16 12.5V18l4 2.6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M12.6 3.6h6.8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M16 3.6v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <span class="brand-text">
+      <strong>REACTION LAB</strong>
+      <em>反应速度实验室</em>
+    </span>
+  </div>
+
+  <div class="top-stats">
+    <span class="chip" id="chipBackend" title="排行榜数据来源"><i class="dot"></i><span id="chipBackendText">载入中…</span></span>
+    <span class="chip" id="chipRefresh" title="显示器刷新率决定计时颗粒度，越高的屏幕越精细">刷新率 —</span>
+    <span class="chip" id="chipBest" title="自己最快的一次平均成绩">我的最好 —</span>
+    <span class="chip" id="chipIdentity" title="排行榜中的身份由昵称决定，同名视为同一位玩家">身份：未设置</span>
+  </div>
+
+  <div class="top-actions">
+    <button class="icon-btn" id="btnSound" type="button" title="提示音开关" aria-pressed="true">🔊</button>
+    <a class="icon-btn" id="linkRepo" href="https://github.com/ArsTian7/reflex-lab" target="_blank" rel="noopener" title="GitHub 仓库">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A7.99 7.99 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/>
+      </svg>
+    </a>
+  </div>
+</header>
+
+<div class="banner" id="offlineBanner" hidden>
+  <strong>排行榜处于「本地模式」</strong>
+  <span>现在只有你自己的浏览器能看到成绩。填入 Supabase 或自建接口（30 秒改 2 行配置）即可变成全员共享的在线榜单。</span>
+  <a href="https://github.com/ArsTian7/reflex-lab#3-开启在线排行榜" target="_blank" rel="noopener">查看开启方法 →</a>
+</div>
+
+<main class="layout">
+
+  <!-- ============ 测试台 ============ -->
+  <section class="panel panel-stage">
+    <div class="panel-head">
+      <h2>测试台<span class="sub">红色等待 · 变绿立刻点击</span></h2>
+      <div class="head-tools">
+        <span class="chip chip-sm" id="chipTrial">第 0 / 10 次</span>
+        <button class="icon-btn icon-btn-sm" id="btnFullscreen" type="button" title="全屏测试台（Esc 退出）">⛶</button>
+      </div>
+    </div>
+
+    <div class="stage" id="stage" tabindex="0" role="button" aria-live="polite" aria-label="反应测试区域，点击开始">
+      <div class="stage-grid" aria-hidden="true"></div>
+      <div class="stage-content">
+        <div class="stage-hint" id="stageHint">点击开始</div>
+        <div class="stage-sub" id="stageSub">10 次测试，取平均值</div>
+      </div>
+      <div class="stage-ripple" id="stageRipple" aria-hidden="true"></div>
+      <div class="stage-tag" id="stageTag" hidden></div>
+    </div>
+
+    <div class="stage-actions">
+      <button class="btn btn-primary" id="btnStart" type="button">开始测试 <kbd>Space</kbd></button>
+      <button class="btn btn-ghost" id="btnReset" type="button">重置 <kbd>Esc</kbd></button>
+      <span class="hint-inline" id="stageTip">建议用鼠标主键点击，键盘也可以（空格）。</span>
+    </div>
+
+    <ul class="trial-dots" id="trialDots" aria-label="单次成绩"></ul>
+  </section>
+
+  <!-- ============ 侧栏 ============ -->
+  <aside class="side">
+    <section class="panel">
+      <div class="panel-head"><h2>我的资料<span class="sub">上榜身份</span></h2></div>
+
+      <div class="profile-row">
+        <div class="avatar-preview" id="avatarPreview" aria-hidden="true"></div>
+        <div class="profile-fields">
+          <label class="field">
+            <span>昵称</span>
+            <input id="nameInput" type="text" maxlength="14" placeholder="例如：闪电小王" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="field-note" id="nameNote">1–14 个字符，排行榜以昵称区分玩家。</div>
+        </div>
+      </div>
+
+      <div class="avatar-head">
+        <span>选择头像</span>
+        <button class="link-btn" id="btnUpload" type="button">上传自己的图片</button>
+      </div>
+      <div class="avatar-grid" id="avatarGrid"></div>
+      <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+
+      <button class="btn btn-wide btn-primary" id="btnSaveProfile" type="button">保存资料</button>
+      <div class="field-note" id="profileState">资料保存在本机浏览器，换电脑需要重新填写。</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>本次成绩<span class="sub" id="runLabel">待开始</span></h2></div>
+      <div class="stat-grid">
+        <div class="stat stat-hero">
+          <span class="stat-k">平均反应</span>
+          <strong class="stat-v" id="statAvg">—</strong>
+          <span class="stat-u">ms</span>
+        </div>
+        <div class="stat">
+          <span class="stat-k">最快单次</span>
+          <strong class="stat-v" id="statBest">—</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-k">最慢单次</span>
+          <strong class="stat-v" id="statWorst">—</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-k">波动 σ</span>
+          <strong class="stat-v" id="statSd">—</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-k">抢跑次数</span>
+          <strong class="stat-v" id="statEarly">0</strong>
+        </div>
+        <div class="stat">
+          <span class="stat-k">评级</span>
+          <strong class="stat-v stat-grade" id="statGrade">—</strong>
+        </div>
+      </div>
+
+      <div class="spark">
+        <div class="spark-head"><span>最近成绩走势</span><em id="sparkMeta">暂无数据</em></div>
+        <svg class="spark-svg" id="sparkline" viewBox="0 0 300 64" preserveAspectRatio="none" aria-hidden="true"></svg>
+      </div>
+
+      <div class="submit-row">
+        <button class="btn btn-primary" id="btnSubmit" type="button" disabled>提交到排行榜</button>
+        <button class="btn btn-ghost" id="btnShare" type="button">复制成绩</button>
+      </div>
+      <div class="field-note" id="submitState">完成一次测试后即可提交。</div>
+    </section>
+  </aside>
+
+  <!-- ============ 排行榜 ============ -->
+  <section class="panel panel-board">
+    <div class="panel-head">
+      <h2>在线排行榜<span class="sub" id="boardSub">按 10 次平均反应速度排名，越小越快</span></h2>
+      <div class="head-tools">
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" id="tabAll" role="tab" aria-selected="true" type="button">总排名榜</button>
+          <button class="tab" id="tabMonth" role="tab" aria-selected="false" type="button">月排名榜</button>
+        </div>
+        <input class="search" id="boardSearch" type="search" placeholder="搜索昵称…" autocomplete="off" />
+        <button class="icon-btn icon-btn-sm" id="btnRefresh" type="button" title="刷新榜单">⟳</button>
+      </div>
+    </div>
+
+    <div class="board-meta">
+      <span id="boardCount">—</span>
+      <span class="sep">·</span>
+      <span id="monthCountdown">—</span>
+      <span class="sep">·</span>
+      <span id="boardUpdated">—</span>
+    </div>
+
+    <div class="podium" id="podium" hidden></div>
+
+    <div class="table-wrap">
+      <table class="board">
+        <thead>
+          <tr>
+            <th class="c-rank">#</th>
+            <th class="c-player">玩家</th>
+            <th class="c-num">平均</th>
+            <th class="c-num">最快单次</th>
+            <th class="c-num">抢跑</th>
+            <th class="c-time">上榜时间</th>
+          </tr>
+        </thead>
+        <tbody id="boardBody"></tbody>
+      </table>
+      <div class="empty" id="boardEmpty" hidden>
+        <div class="empty-emoji">🐾</div>
+        <p>榜单还空着，来当第一个上榜的人吧。</p>
+      </div>
+    </div>
+
+    <div class="board-foot">
+      <div class="my-ranks" id="myRanks"></div>
+      <div class="legend">
+        <span><i class="lg lg-great"></i>闪电 &lt;200ms</span>
+        <span><i class="lg lg-good"></i>优秀 &lt;250ms</span>
+        <span><i class="lg lg-mid"></i>正常 &lt;320ms</span>
+        <span><i class="lg lg-slow"></i>再练练</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 说明 ============ -->
+  <section class="notes">
+    <article class="note">
+      <h3>怎么测才准</h3>
+      <ul>
+        <li>用鼠标主键或空格键，手指提前放在按键上但不要提前发力。</li>
+        <li>红灯阶段抢跑会让该次作废，重新计时，不会污染平均值。</li>
+        <li>计时用 <code>performance.now()</code> 的亚毫秒时钟，误差主要来自屏幕刷新率（60Hz ≈ 每帧 16.7ms）。</li>
+        <li>平均值取 10 次有效成绩；低于 55ms 的点击视为无效并重测该次。</li>
+      </ul>
+    </article>
+    <article class="note">
+      <h3>成绩参考</h3>
+      <ul>
+        <li><b>180–220ms</b> 电竞级反应，人类里的快枪手。</li>
+        <li><b>220–280ms</b> 大多数年轻玩家的水平区间。</li>
+        <li><b>280–350ms</b> 正常范围，跟设备与状态关系很大。</li>
+        <li><b>&gt;350ms</b> 疲劳、走神或鼠标延迟（蓝牙鼠标、省电模式）在拖后腿。</li>
+      </ul>
+    </article>
+    <article class="note">
+      <h3>排行规则</h3>
+      <ul>
+        <li>昵称即身份，同名视为同一玩家，只保留本人<strong>最快的一次平均值</strong>。</li>
+        <li>月榜按 UTC+8 自然月统计，每月 1 日自动换榜，历史成绩留在总榜。</li>
+        <li>提交有频率限制；明显异常的机器速度（&lt;55ms）会被拒绝入库。</li>
+        <li>头像支持 10 个内置动物形象或上传本地图片（自动压到 128px 内）。</li>
+      </ul>
+    </article>
+  </section>
+</main>
+
+<footer class="footer">
+  <span>Reaction Lab · 静态站点，托管于 GitHub Pages</span>
+  <span class="sep">·</span>
+  <a href="https://github.com/ArsTian7/reflex-lab" target="_blank" rel="noopener">源码 / 部署说明</a>
+  <span class="sep">·</span>
+  <span>建议在电脑上使用 Chrome / Edge 获得最稳的计时</span>
+</footer>
+
+<div class="mobile-block" id="mobileBlock">
+  <div class="mb-card">
+    <div class="mb-emoji">🖥️</div>
+    <h3>请在电脑上打开</h3>
+    <p>反应速度测试依赖鼠标与键盘的精确输入，这个页面只面向桌面端设计。请用电脑浏览器访问本页。</p>
+    <button class="btn btn-ghost" id="btnIgnoreMobile" type="button">仍要继续</button>
+  </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="assets/js/config.js"></script>
+<script src="assets/js/avatars.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/test.js"></script>
+<script src="assets/js/leaderboard.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

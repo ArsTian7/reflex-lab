@@ -1,0 +1,9 @@
+name = "reflex-lab"
+main = "cloudflare-worker.js"
+compatibility_date = "2025-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "reflex-lab"
+# 运行 wrangler d1 create reflex-lab 之后，把返回的 id 填到这里
+database_id = "REPLACE_WITH_YOUR_D1_ID"
