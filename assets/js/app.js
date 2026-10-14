@@ -72,7 +72,9 @@
     el('chipBackend').className = 'chip ' + (st.online ? 'is-online' : 'is-local');
     el('offlineBanner').hidden = st.online;
     if (st.fellBack) {
-      UI.toast('config.js 里的后端配置不完整，已回落到本地模式。', 'warn', 5200);
+      UI.toast(st.reason === 'secret'
+        ? '⚠️ config.js 里填的是 secret / service_role 密钥：这种密钥绝不能放在网页前端，已自动切回本地模式。请改用 anon public / publishable key（误发过的话记得在 Supabase 里 rotate 它）。'
+        : 'config.js 里的后端配置不完整，已回落到本地模式。', 'warn', st.reason === 'secret' ? 14000 : 5200);
     }
   }
 
@@ -137,6 +139,10 @@
       el('boardEmpty').hidden = false;
       el('boardEmpty').querySelector('p').textContent = '榜单读取失败：' + friendlyError(err);
       setText('boardUpdated', '读取失败');
+      if (B.status().online) {
+        setText('chipBackendText', B.status().text + '（连接失败）');
+        el('chipBackend').className = 'chip is-local';
+      }
       if (!silent) UI.toast('榜单读取失败：' + friendlyError(err), 'error', 5200);
       return false;
     });
@@ -148,7 +154,9 @@
     if (code === 401 || code === 403) return '密钥无效或权限被拒绝';
     if (code === 404) return '找不到数据表或视图，请先在数据库里执行 supabase/schema.sql';
     if (code === 429) return '请求太频繁，稍后再试';
-    if (msg.indexOf('Failed to fetch') >= 0 || msg.indexOf('NetworkError') >= 0) return '网络不可达（地址写错或被拦截）';
+    if (code === 0 || msg.indexOf('网络请求失败') >= 0 || msg.indexOf('Failed to fetch') >= 0 ||
+        msg.indexOf('NetworkError') >= 0) return '网络不可达：检查 config.js 里的地址是否写对';
+    if (msg.indexOf('超时') >= 0) return '请求超时：网络不通或后端没有响应';
     if (msg.length > 90) return msg.slice(0, 90) + '…';
     return msg;
   }

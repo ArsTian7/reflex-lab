@@ -44,16 +44,21 @@ npx serve .
 1. 打开 <https://supabase.com> → `Start your project` → 用 GitHub 账号登录（不需要信用卡）。
 2. `New project` → 填名字（如 `reflex-lab`）→ Region 选 `Southeast Asia (Singapore)` → Create。
 3. 左侧 `SQL Editor` → `New query` → 把 [supabase/schema.sql](supabase/schema.sql) 全文粘进去 → `Run`，看到 `Success` 即可。
-4. 左侧 `Project Settings` → `API`，复制两个值：
-   - `Project URL`，形如 `https://abcdefgh.supabase.co`
-   - `Project API keys` 里的 `anon` `public`（这一串本来就设计成可公开，权限由数据库的 RLS 策略控制）
+4. 左侧 `Project Settings` → `API`（新版控制台叫 `API Keys`），复制**两个**值：
+
+   | 要复制的值 | 长什么样 | 说明 |
+   | --- | --- | --- |
+   | `Project URL` | `https://abcdefghijkl.supabase.co` | 项目地址 |
+   | `anon` `public` 密钥，或新版叫 `Publishable key` | `eyJhbGciOi...`（很长的一串 JWT）或 `sb_publishable_...` | 两种都支持，本来就是设计成可公开的密钥 |
+
+   ⚠️ **绝对不要用** `service_role` 或 `Secret key`（`sb_secret_...`）——那是服务端密钥，放进网页等于公开数据库钥匙。本站前端内置了拦截：一旦发现是这类密钥，会自动拒绝启用在线模式，并在页面上提示你换掉。
 5. 打开 [assets/js/config.js](assets/js/config.js)，改成：
 
 ```js
 backend: 'supabase',
 supabase: {
   url: 'https://abcdefgh.supabase.co',
-  anonKey: 'eyJhbGciOi...你的 anon key',
+  anonKey: 'eyJhbGciOi...你的 anon / publishable key',
   // 下面的保持默认
 },
 ```

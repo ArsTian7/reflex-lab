@@ -18,6 +18,23 @@
 
   function lower(s) { return String(s || '').trim().toLowerCase(); }
 
+  /* 带超时的 fetch：地址写错或网络不通时，别让用户一直盯着骨架屏 */
+  function fetchT(url, opts, ms) {
+    var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctl) ctl.abort(); }, ms || 12000);
+    var o = Object.assign({}, opts || {});
+    if (ctl) o.signal = ctl.signal;
+    return fetch(url, o).then(function (res) {
+      clearTimeout(timer);
+      return res;
+    }, function (err) {
+      clearTimeout(timer);
+      var e = new Error(err && err.name === 'AbortError' ? '请求超时（12 秒）' : '网络请求失败');
+      e.status = 0;
+      throw e;
+    });
+  }
+
   /* ---------- 通用：同名只留最快的一次平均成绩 ---------- */
   function bestPerName(rows) {
     var map = {};
@@ -117,7 +134,14 @@
    * ===================================================== */
   var SB = (function () {
     function conf() { return CFG.supabase || {}; }
-    function ready() { return !!(conf().url && conf().anonKey); }
+    function keyIssue() {
+      var k = String(conf().anonKey || '');
+      if (!conf().url || !k) return 'missing';
+      /* secret / service_role 属于服务端密钥，放进前端等于把数据库钥匙公开 */
+      if (/^sb_secret_/i.test(k) || k.indexOf('service_role') >= 0) return 'secret';
+      return null;
+    }
+    function ready() { return keyIssue() === null; }
     function base() { return String(conf().url).replace(/\/+$/, '') + '/rest/v1'; }
     function headers(extra) {
       var h = {
@@ -152,7 +176,7 @@
         var q = base() + '/' + view +
           '?select=player_name,avatar,average_ms,best_ms,worst_ms,false_starts,trials,month_key,created_at' +
           '&order=average_ms.asc&limit=' + CFG.boardLimit;
-        return fetch(q, { headers: headers(), cache: 'no-store' }).then(function (res) {
+        return fetchT(q, { headers: headers(), cache: 'no-store' }).then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw fail(res, t); });
           return res.json();
         }).then(function (rows) {
@@ -174,7 +198,7 @@
           device_id: S.deviceId(),
           raw: entry.trials,
         };
-        return fetch(base() + '/' + (conf().table || 'scores'), {
+        return fetchT(base() + '/' + (conf().table || 'scores'), {
           method: 'POST',
           headers: headers({ 'Prefer': 'return=minimal' }),
           body: JSON.stringify(body),
@@ -195,6 +219,7 @@
         });
       },
       ready: ready,
+      keyIssue: keyIssue,
     };
   })();
 
@@ -209,7 +234,7 @@
     return {
       fetch: function (scope) {
         var url = base() + '/leaderboard?scope=' + (scope === 'month' ? 'month' : 'all') + '&limit=' + CFG.boardLimit;
-        return fetch(url, { cache: 'no-store' }).then(function (res) {
+        return fetchT(url, { cache: 'no-store' }).then(function (res) {
           if (!res.ok) throw new Error('HTTP ' + res.status);
           return res.json();
         }).then(function (data) {
@@ -230,7 +255,7 @@
         });
       },
       submit: function (entry) {
-        return fetch(base() + '/scores', {
+        return fetchT(base() + '/scores', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -254,17 +279,25 @@
   var impl = LOCAL;
   var fellBack = false;
 
+  var fallReason = null;
+
   if (chosen === 'supabase') {
-    if (SB.ready()) impl = SB; else { fellBack = true; }
+    if (SB.ready()) impl = SB;
+    else { fellBack = true; fallReason = SB.keyIssue() === 'secret' ? 'secret' : 'missing'; }
   } else if (chosen === 'rest') {
-    if (REST.ready()) impl = REST; else { fellBack = true; }
+    if (REST.ready()) impl = REST; else { fellBack = true; fallReason = 'missing'; }
   }
 
   function describe() {
-    if (fellBack) return { mode: 'local', online: false, text: '本地模式（缺配置）', fellBack: true };
-    if (impl === SB) return { mode: 'supabase', online: true, text: '在线 · Supabase', fellBack: false };
-    if (impl === REST) return { mode: 'rest', online: true, text: '在线 · 自建接口', fellBack: false };
-    return { mode: 'local', online: false, text: '本地模式', fellBack: false };
+    if (fellBack) {
+      return {
+        mode: 'local', online: false, fellBack: true, reason: fallReason,
+        text: fallReason === 'secret' ? '本地模式（密钥用错了）' : '本地模式（缺配置）',
+      };
+    }
+    if (impl === SB) return { mode: 'supabase', online: true, text: '在线 · Supabase', fellBack: false, reason: null };
+    if (impl === REST) return { mode: 'rest', online: true, text: '在线 · 自建接口', fellBack: false, reason: null };
+    return { mode: 'local', online: false, text: '本地模式', fellBack: false, reason: null };
   }
 
   window.ReflexBoard = {
