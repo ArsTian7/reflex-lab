@@ -33,6 +33,9 @@
 
 * { box-sizing: border-box; }
 
+/* hidden 属性必须真的隐藏：否则 .banner / .podium 这类带 display 的元素会无视它 */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
