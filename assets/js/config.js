@@ -8,11 +8,11 @@ window.REFLEX_CONFIG = {
    *   'supabase' —— 推荐。填下面的 url / anonKey，全站共享的在线排行榜。见 README 第 3 节。
    *   'rest'     —— 自建 HTTP 接口（仓库内 server/ 有现成的 Cloudflare Worker）。
    */
-  backend: 'local',
+  backend: 'supabase',
 
   supabase: {
-    url: '',            // 例：https://abcdefghijklm.supabase.co
-    anonKey: '',        // Supabase 的 anon public key（可公开，权限由 RLS 控制）
+    url: 'https://iukxmvpzxjbbymaehjft.supabase.co',          // 已接通
+    anonKey: 'sb_publishable_DtWS1EnKV6x_rvm_isZQxA_ORg8wYu1', // publishable key，可公开；权限由数据库 RLS 控制
     table: 'scores',
     viewAll: 'leaderboard_all',
     viewMonth: 'leaderboard_month',

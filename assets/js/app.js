@@ -358,7 +358,7 @@
       if (!lastResult) { UI.toast('先完成一次测试', 'warn'); return; }
       var r = lastResult;
       var text = '我的反应速度平均值 ' + UI.fmt(r.average, 1) + 'ms（10 次，最快 ' + Math.round(r.best) +
-        'ms），评级：' + r.grade.label + '。来 Reaction Lab 挑战我：' + location.href.split('?')[0];
+        'ms），评级：' + r.grade.label + '。来天天 Reaction Lab 挑战我：' + location.href.split('?')[0];
       copyText(text).then(function (ok) {
         UI.toast(ok ? '成绩文案已复制，去粘贴给朋友吧' : '复制失败，请手动选择文字', ok ? 'ok' : 'warn');
       });

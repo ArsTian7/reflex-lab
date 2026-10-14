@@ -63,48 +63,12 @@
   }
 
   /* =====================================================
-   *  本地模式
+   *  本地模式（不放任何预设/演示数据，榜单从空开始）
    * ===================================================== */
   var LOCAL = (function () {
-    var DEMO = [
-      { name: '闪电小王', avatar: 'preset:cat', average: 187, best: 164 },
-      { name: 'Pixel', avatar: 'preset:penguin', average: 198, best: 172 },
-      { name: '不吃香菜', avatar: 'preset:panda', average: 209, best: 183 },
-      { name: 'Kuro', avatar: 'preset:owl', average: 218, best: 191 },
-      { name: '芋泥啵啵', avatar: 'preset:rabbit', average: 226, best: 198 },
-      { name: 'Mika', avatar: 'preset:fox', average: 234, best: 205 },
-      { name: '键盘杀手', avatar: 'preset:chick', average: 247, best: 219 },
-      { name: 'Nova', avatar: 'preset:frog', average: 258, best: 231 },
-      { name: '午后困觉', avatar: 'preset:bear', average: 271, best: 240 },
-      { name: '阿柴本柴', avatar: 'preset:shiba', average: 284, best: 252 },
-      { name: 'Lulu', avatar: 'preset:koala', average: 299, best: 268 },
-      { name: '小粉猪', avatar: 'preset:pig', average: 316, best: 283 },
-    ];
-
-    function seed() {
-      var list = read();
-      if (list && list.length) return list;
-      var mk = S.monthKeyOf();
-      var prev = S.monthKeyOf(Date.now() - 32 * 86400000);
-      var rows = DEMO.map(function (d, i) {
-        var isPrev = i % 4 === 3;
-        var t = Date.now() - (i * 5 + 2) * 3600000 - (isPrev ? 32 * 86400000 : 0);
-        return {
-          name: d.name, avatar: d.avatar,
-          average: d.average, best: d.best, worst: d.average + 60 + i * 4,
-          earlyStarts: (i % 3), trials: CFG.trials,
-          monthKey: isPrev ? prev : mk,
-          createdAt: new Date(t).toISOString(),
-          demo: true,
-        };
-      });
-      write(rows);
-      return rows;
-    }
-
     function read() {
-      try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null'); }
-      catch (e) { return null; }
+      try { return JSON.parse(localStorage.getItem(LOCAL_KEY) || '[]') || []; }
+      catch (e) { return []; }
     }
     function write(rows) {
       try { localStorage.setItem(LOCAL_KEY, JSON.stringify(rows)); } catch (e) { /* 忽略 */ }
@@ -112,11 +76,10 @@
 
     return {
       fetch: function (scope) {
-        return Promise.resolve(shape(seed(), scope));
+        return Promise.resolve(shape(read(), scope));
       },
       submit: function (entry) {
-        var rows = seed();
-        rows.forEach(function (r) { if (lower(r.name) === lower(entry.name)) delete r.demo; });
+        var rows = read();
         rows.push(Object.assign({}, entry));
         write(rows);
         var ranked = shape(rows, 'all');
@@ -124,7 +87,7 @@
         return Promise.resolve({ ok: true, rank: rank || null, total: ranked.length });
       },
       clearMine: function (name) {
-        write(seed().filter(function (r) { return lower(r.name) !== lower(name); }));
+        write(read().filter(function (r) { return lower(r.name) !== lower(name); }));
       },
     };
   })();
