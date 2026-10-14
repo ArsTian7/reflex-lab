@@ -171,6 +171,7 @@
       worst: result.worst,
       earlyStarts: result.earlyStarts,
       trials: result.count,
+      raw: result.trials,
       monthKey: S.monthKeyOf(),
       refreshHz: refreshHz,
       platform: platform(),

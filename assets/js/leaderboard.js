@@ -151,6 +151,23 @@
       };
       return Object.assign(h, extra || {});
     }
+    function headersNoBearer(extra) {
+      var h = { 'apikey': conf().anonKey, 'Content-Type': 'application/json' };
+      return Object.assign(h, extra || {});
+    }
+
+    /* 新版 publishable key 不是 JWT，个别项目的 PostgREST 不接受 Bearer 形式。
+       碰到 401 就用「只带 apikey 头」再试一次，两种密钥格式都能直接用。 */
+    function request(path, opts) {
+      opts = opts || {};
+      var url = base() + path;
+      var first = Object.assign({}, opts, { headers: headers(opts.headers) });
+      return fetchT(url, first).then(function (res) {
+        if (res.status !== 401) return res;
+        var retry = Object.assign({}, opts, { headers: headersNoBearer(opts.headers) });
+        return fetchT(url, retry);
+      });
+    }
     function fail(res, text) {
       var err = new Error(text || ('HTTP ' + res.status));
       err.status = res.status;
@@ -173,10 +190,10 @@
     return {
       fetch: function (scope) {
         var view = scope === 'month' ? (conf().viewMonth || 'leaderboard_month') : (conf().viewAll || 'leaderboard_all');
-        var q = base() + '/' + view +
+        var q = '/' + view +
           '?select=player_name,avatar,average_ms,best_ms,worst_ms,false_starts,trials,month_key,created_at' +
           '&order=average_ms.asc&limit=' + CFG.boardLimit;
-        return fetchT(q, { headers: headers(), cache: 'no-store' }).then(function (res) {
+        return request(q, { cache: 'no-store' }).then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw fail(res, t); });
           return res.json();
         }).then(function (rows) {
@@ -196,11 +213,11 @@
           platform: entry.platform || '',
           refresh_hz: entry.refreshHz || null,
           device_id: S.deviceId(),
-          raw: entry.trials,
+          raw: entry.raw || entry.trials,
         };
-        return fetchT(base() + '/' + (conf().table || 'scores'), {
+        return request('/' + (conf().table || 'scores'), {
           method: 'POST',
-          headers: headers({ 'Prefer': 'return=minimal' }),
+          headers: { 'Prefer': 'return=minimal' },
           body: JSON.stringify(body),
         }).then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw fail(res, t); });
@@ -209,13 +226,7 @@
           return SB.fetch('all');
         }).then(function (rows) {
           var rank = rows.findIndex(function (r) { return lower(r.name) === lower(entry.name); }) + 1;
-          var mine = rows[rank - 1];
-          return {
-            ok: true,
-            rank: mine && mine.average === Math.round(entry.average * 10) / 10 ? rank : (rank || null),
-            total: rows.length,
-            isNewBest: !!mine && Math.abs(mine.average - entry.average) < 0.05,
-          };
+          return { ok: true, rank: rank || null, total: rows.length };
         });
       },
       ready: ready,
@@ -263,7 +274,7 @@
             average: Number(entry.average.toFixed(1)), best: Math.round(entry.best),
             worst: Math.round(entry.worst), earlyStarts: entry.earlyStarts,
             trials: entry.trials, monthKey: entry.monthKey,
-            deviceId: S.deviceId(), refreshHz: entry.refreshHz || null, raw: entry.trials,
+            deviceId: S.deviceId(), refreshHz: entry.refreshHz || null, raw: entry.raw || entry.trials,
           }),
         }).then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
